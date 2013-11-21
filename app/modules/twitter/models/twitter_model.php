@@ -42,8 +42,8 @@ class Twitter_model extends CI_Model
 		$CI->load->model('publish/content_model');
 		require(APPPATH . 'modules/twitter/libraries/twitteroauth.php');
 		
-		// get last date this cron ran
-		$last_update = (setting('twitter_last_tweet') == '') ? '2010-01-01' : setting('twitter_last_tweet');
+		// only process last hour
+		$start_date = date('Y-m-d', strtotime('now - 1 hour'));
 		
 		$types = unserialize(setting('twitter_content_types'));
 		$topics = (setting('twitter_topics') == '') ? NULL : unserialize(setting('twitter_topics'));
@@ -54,13 +54,18 @@ class Twitter_model extends CI_Model
 		}
 		
 		foreach ($types as $type) {
-			$contents = $CI->content_model->get_contents(array('type' => $type, 'topic' => $topics, 'start_date' => $last_update, 'limit' => '5'));
+			$contents = $CI->content_model->get_contents(array('type' => $type, 'topic' => $topics, 'start_date' => $start_date, 'limit' => '50'));
 			
 			if (!empty($contents)) {
 				// flip so that the latest posts are tweeted last
 				$contents = array_reverse($contents);
 			
 				foreach ($contents as $content) {
+					// have we already tweeted this?
+					if ($this->db->select('link_id')->from('links')->where('link_module','twitter')->where('link_parameter',$content['link_id'])->get()->num_rows() > 0) {
+						continue;
+					}
+					
 					if (!isset($connection)) {
 						$connection = new TwitterOAuth(setting('twitter_consumer_key'), setting('twitter_consumer_secret'), setting('twitter_oauth_token'), setting('twitter_oauth_token_secret'));
 						
